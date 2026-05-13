@@ -1521,34 +1521,48 @@ function majTarifScol(){
 }
 
 function calcResumeTotal(){
-    const frais=parseFloat($('iFrais')?.value)||0;
-    const niv=$('iNiveau')?.value||'';
-    const mensuel=niv?scolMensuel(niv):0;
-    const scolAn=mensuel*10;
+    const frais = parseFloat($('iFrais')?.value) || 0;
+    const niv = $('iNiveau')?.value || '';
+    const mensuel = niv ? scolMensuel(niv) : 0;
+    const scolAn = mensuel * 10;
 
-    let services=0;
-    if($('iCantine')?.checked)services+=cfg.prixCantine||15000;
-    if($('iTransport')?.checked)services+=cfg.prixTransport||10000;
-    if($('iFourn')?.checked)services+=cfg.prixFournitures||35000;
+    let services = 0;
+    if($('iCantine')?.checked) services += cfg.prixCantine || 15000;
+    if($('iTransport')?.checked) services += cfg.prixTransport || 10000;
+    if($('iFourn')?.checked) services += cfg.prixFournitures || 35000;
 
-    const reduc=parseInt($('iReduc')?.value||'0');
-    const totalAvant=frais+services; // Réduction seulement sur inscription + services
-    const montantReduc=totalAvant*(reduc/100);
-    const totalNet=Math.round(totalAvant-montantReduc);
-    const totalGlobal=totalNet+scolAn;
+    const reduc = parseInt($('iReduc')?.value || '0');
 
-    if($('rFrais'))$('rFrais').textContent=fmt(frais)+' F';
-    if($('rScol'))$('rScol').textContent=fmt(scolAn)+' F ('+fmt(mensuel)+' F × 10 mois)';
-    if($('rServices'))$('rServices').textContent=fmt(services)+' F';
-    if($('rReduc'))$('rReduc').textContent='-'+fmt(montantReduc)+' F';
-    if($('rTotal'))$('rTotal').textContent=fmt(totalGlobal)+' FCFA';
-    if($('scolAnnuel'))$('scolAnnuel').textContent=fmt(scolAn)+' FCFA';
+    // Séparation inscription / services
+    const reducInsc = frais * (reduc / 100);
+    const reducServices = services * (reduc / 100);
 
-    // Calculer le total payé et reste
+    const totalInscNet = Math.round(frais - reducInsc);
+    const totalServicesNet = Math.round(services - reducServices);
+    const montantReduc = Math.round(reducInsc + reducServices);
+
+    const totalGlobal = totalInscNet + totalServicesNet + scolAn;
+
+    if($('rFrais')) $('rFrais').textContent = fmt(frais) + ' F';
+    if($('rScol')) $('rScol').textContent = fmt(scolAn) + ' F (' + fmt(mensuel) + ' F × 10 mois)';
+    if($('rServices')) $('rServices').textContent = fmt(totalServicesNet) + ' F';
+    if($('rReduc')) $('rReduc').textContent = '-' + fmt(montantReduc) + ' F';
+    if($('rTotal')) $('rTotal').textContent = fmt(totalGlobal) + ' FCFA';
+    if($('scolAnnuel')) $('scolAnnuel').textContent = fmt(scolAn) + ' FCFA';
+
     calcTotalPaye();
-    return{frais,mensuel,scolAn,services,reduc,montantReduc,totalNet,totalGlobal};
+    return {
+        frais,
+        mensuel,
+        scolAn,
+        services,
+        reduc,
+        montantReduc,
+        totalInscNet,
+        totalServicesNet,
+        totalGlobal
+    };
 }
-
 function calcTotalPaye(){
     const pInsc=parseFloat($('iPayeInscription')?.value)||0;
     const pScol=parseFloat($('iPayeScolarite')?.value)||0;
@@ -1860,19 +1874,26 @@ async function doInscrire(e){
     if(!vName(parent)){toast('❌ Nom du parent invalide','error');return}
     if(!niveau){toast('❌ Sélectionnez un niveau','error');return}
     const mat='MK'+cpt++;
-    const fraisInscription=parseFloat($('iFrais').value)||cfg.fraisInscription||50000;
-    const scolMens=scolMensuel(niveau);
-    const scolAn=scolMens*10;
-    const prixCantine=$('iCantine')?.checked?(cfg.prixCantine||15000):0;
-    const prixTransport=$('iTransport')?.checked?(cfg.prixTransport||10000):0;
-    const prixFourn=$('iFourn')?.checked?(cfg.prixFournitures||35000):0;
-    const totalServices=prixCantine+prixTransport+prixFourn;
-    const reduc=parseInt($('iReduc')?.value||'0');
-    const totalInscServices=fraisInscription+totalServices;
-    const montantReduc=totalInscServices*(reduc/100);
-    const totalInscNet=Math.round(totalInscServices-montantReduc);
-    const totalGeneral=totalInscNet+scolAn;
+    const fraisInscription = parseFloat($('iFrais').value) || cfg.fraisInscription || 50000;
+const scolMens = scolMensuel(niveau);
+const scolAn = scolMens * 10;
 
+const prixCantine = $('iCantine')?.checked ? (cfg.prixCantine || 15000) : 0;
+const prixTransport = $('iTransport')?.checked ? (cfg.prixTransport || 10000) : 0;
+const prixFourn = $('iFourn')?.checked ? (cfg.prixFournitures || 35000) : 0;
+
+const totalServices = prixCantine + prixTransport + prixFourn;
+const reduc = parseInt($('iReduc')?.value || '0');
+
+// Séparer inscription et services
+const reducInsc = fraisInscription * (reduc / 100);
+const reducServices = totalServices * (reduc / 100);
+
+const totalInscNet = Math.round(fraisInscription - reducInsc);
+const totalServicesNet = Math.round(totalServices - reducServices);
+const montantReduc = Math.round(reducInsc + reducServices);
+
+const totalGeneral = totalInscNet + totalServicesNet + scolAn;
     // Paiements à la date d'inscription
     const payeInscription=parseFloat($('iPayeInscription')?.value)||0;
     const payeScolarite=parseFloat($('iPayeScolarite')?.value)||0;
@@ -1952,7 +1973,7 @@ async function doInscrire(e){
 
 function showRecuInscription(el,paiementsInsc,parentId,parentMdp){
     // URL du site (pas file://)
-    const siteUrl='https://mk-school.netlify.app';
+    const siteUrl='https://mk-school.onrender.com/';
 
     // QR Code pointe vers les infos de l'élève
     const qrData=`${siteUrl}\nMatricule: ${el.matricule}\nNom: ${el.nom}\nClasse: ${el.niveau}\nParent: ${el.nomParent}\nDate: ${now()}`;
@@ -2076,9 +2097,11 @@ function showRecuInscription(el,paiementsInsc,parentId,parentMdp){
                 ${el.totalServices>0?`
                 <div style="flex:1;min-width:150px;background:#fff3cd;border-radius:8px;padding:10px;border-left:3px solid #f39c12">
                     <div style="font-weight:700;font-size:11px;color:#856404;margin-bottom:6px">🎯 SERVICES</div>
-                    <div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span>Total services:</span><span>${fmt(el.totalServices)} F</span></div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span>Total services:</span><span>${fmt(el.totalServicesNet ?? el.totalServices)} F</span></div>
                     <div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0;color:green;font-weight:700"><span>Payé:</span><span>+${fmt(paiementsInsc.payeServices)} F</span></div>
-                    <div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0;color:${el.totalServices-paiementsInsc.payeServices<=0?'green':'red'};font-weight:700"><span>Reste:</span><span>${Math.max(0,el.totalServices-paiementsInsc.payeServices)===0?'✅':fmt(Math.max(0,el.totalServices-paiementsInsc.payeServices))+' F'}</span></div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0;color:${(el.totalServicesNet ?? el.totalServices)-paiementsInsc.payeServices<=0?'green':'red'};font-weight:700"><span>Reste:</span><span>${Math.max(0,(el.totalServicesNet ?? el.totalServices)-paiementsInsc.payeServices)===0
+    ? '✅'
+    : fmt(Math.max(0,(el.totalServicesNet ?? el.totalServices)-paiementsInsc.payeServices)) + ' F'}' F'}</span></div>
                 </div>`:''}
 
             </div>
@@ -2333,7 +2356,7 @@ function doPaiement(e){
 }
 
 function showRecuPaiement(p,el){
-    const siteUrl='https://mk-school.netlify.app';
+    const siteUrl='https://mk-school.onrender.com/';
     const qrData=`${siteUrl}\nRecu: ${p.numRecu}\nEleve: ${el.nom}\nMontant: ${fmt(p.montant)} FCFA\nDate: ${p.date}`;
     const qr=genQR(qrData,80);
     const res=calculerResumeEleve(p.matricule,el);
